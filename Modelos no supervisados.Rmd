@@ -803,11 +803,7 @@ p56f_r3 <- plot(subset_physical_attributes[c(1,5)], col=as.factor(analysis_data$
 ```
 
 
-Como podemos observar k means no suele confundir los grupos de Sharp-Shinned (en amarillo en k means y verde en la clasificacion real) y Red-tailed (en morado en k means y rojo en la clasificacion real). Sin embargo tiende a confundir los individuos de la especie Cooper’s (azul en k means y negro en la clasificación real) con Red-tailed y Sharp-Shinned. 
-
-Si retomamos las conclusiones que obtuvimos en el analisis preeliminar esta confusión tiene cierto sentido puesto que Sharp-Shinned tenia una embergadura pequeña, Red-tailed tenía una embergadura bastante grande y Cooper’s se encontraba en la media. 
-
-
+Como podemos observar, la clasificación de k-means con esta selección de variables parece prácticamente perfecta, destacando la capacidad del algoritmo para identificar patrones distintivos en las características físicas de las aves. Esta precisión en la agrupación sugiere que las variables elegidas, que se centran en atributos físicos como la longitud del ala, el peso, el culmen, el hallux y la cola, son altamente informativas para distinguir entre las especies de aves.
 
 
 
@@ -1151,22 +1147,35 @@ print(contadores)
 
 Como podemos observar:
 
-- Cooper’s se han clasificado 32 individuos en el cluster 2 y 36 en el cluster 3.  
-- Red-tailed se han clasificado 226 en el cluster 1 y 227 en el cluster 2.   
-- Sharp-Shinned se han clasificado 191 individuos en el cluster 3 y 1 en el cluster 2.   
+- Cooper’s se han clasificado 63 individuos en el cluster 1, 2 en el cluster 2 y 2 en el cluster 3.  
+- Red-tailed se han clasificado 542 en el cluster 2 y 1 en el cluster 1.   
+- Sharp-Shinned se han clasificado 191 individuos en el cluster 3 y 1 en el cluster 1.   
 
 
-Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y el cluster 3 corresponde a  Sharp-Shinned. Sin embargo para Cooper’s y Red-tailed las observaciones se distribuyen prácticamente a la mitad entre dos clusters. 
+Podríamos decir que el cluster 1 corresponde a Cooper’s, el cluster 2 corresponde a Red-tailed y el cluster 3 corresponde a  Sharp-Shinned. 
 
 Así: 
 
-- Cooper’s tiene un 46.26% de sus observaciones en el cluster 2 y un 53.73% de sus observaciones en el cluster 3.    
-- Red-tailed tiene un 48.98% de sus observaciones en el cluster 1 y un 51.01% de sus observaciones en el cluster 2.      
-- Sharp-Shinned tiene un 0.52% de sus observaciones en el cluster 2 y un 99.47% de sus observaciones en el cluster 3.  
+- Cooper’s tiene un 94.02% de sus observaciones en el cluster 1, un 2.98% de sus observaciones en el cluster 2 y un 2.98% de sus observaciones en el cluster 3.    
+- Red-tailed tiene un 99.81% de sus observaciones en el cluster 2 y un 0.18% de sus observaciones en el cluster 1.      
+- Sharp-Shinned tiene un 99.47% de sus observaciones en el cluster 3 y un 0.52% de sus observaciones en el cluster 1.  
 
 Prácticamente todos los individuos de Sharp-Shinned se encuentran clasificados en el cluster 3 aunque en este también se encuentran individuos pertenecientes a Cooper’s. Esto nos indica que los individuos mas pequeños de Cooper’s se confunden con la especie de Sharp-Shinned. 
 
 Por su parte, los individuos de Cooper’s que no se mezclan con los de Sharp-Shinned se mezclan con los individuos mas pequeños de Red-tailed. 
+
+Esta información se resume en la siguiente tabla: 
+
+```{r}
+results_selected_var <- matrix(c(94.02, 5.97,
+                                  99.81, 0.18,
+                                  99.47, 0.52),
+                                nrow = 3, byrow = TRUE,
+                                dimnames = list(c("Cooper’s", "Red-tailed", "Sharp-Shinned"),
+                                                c("Clasificado Correctamente", "Clasificado Erróneamente")))
+print(results_selected_var)
+```
+
 
 
 ## Conclusiones de DBSCAN
@@ -1216,24 +1225,20 @@ print(results_selected_var)
 ## Comparativa de ambos métodos
 
 
-Para nuestro caso de estudio, la aplicación de k-means y DBSCAN para el clustering de tres especies de halcones basado en sus atributos físicos ha arrojado resultados distintos y revelado características específicas de cada algoritmo.
+La clasificación de aves utilizando los algoritmos K-means y DBSCAN ha arrojado resultados interesantes y reveladores. A continuación, vamos a comparar el rendimiento de ambos métodos con respecto a la precisión de la clasificación para las tres especies de aves evaluadas: Cooper's, Red-tailed y Sharp-Shinned.
 
 **K-means:**
 
-- K-means parece haber tenido dificultades para manejar la variabilidad y solapamiento entre las especies, especialmente evidente en la distribución casi equitativa de individuos de Cooper’s y Red-tailed entre dos clusters.
+El algoritmo K-means ha demostrado un alto nivel de precisión en la clasificación de las aves en estudio. En general, la tasa de clasificación correcta es bastante elevada, alcanzando cifras superiores al 94% para Cooper's y superando el 99% para Red-tailed y Sharp-Shinned. Estos resultados sugieren que el K-means es eficaz para agrupar las aves en función de sus atributos físicos, especialmente en el caso de Red-tailed y Sharp-Shinned.
 
-- La interpretación de los resultados de k-means sugiere una confusión significativa entre individuos más pequeños de Cooper’s y Sharp-Shinned, así como entre individuos más grandes de Cooper’s y Red-tailed.
-
-- La sensibilidad a la forma esférica de los clusters y la dependencia de los valores iniciales de los centroides han contribuido a esta confusión.
+Sin embargo, es importante señalar que, aunque en términos generales el rendimiento es destacado, aún existe un pequeño margen de error en la clasificación de Cooper's, con un 5.97% clasificado incorrectamente. Si retomamos las conclusiones que obtuvimos en el analisis preeliminar esta confusión tiene cierto sentido puesto que Sharp-Shinned tenia una embergadura pequeña, Red-tailed tenía una embergadura bastante grande y Cooper’s se encontraba en la media.
 
 **DBSCAN:**
 
-- DBSCAN, por otro lado, ha demostrado ser más robusto en la identificación de clusters de forma variable y ha asignado correctamente un alto porcentaje de individuos a sus respectivos grupos.
+Por otro lado, el algoritmo DBSCAN también ha mostrado resultados sólidos, aunque con algunas diferencias notables respecto a K-means. En general, DBSCAN ha logrado tasas de clasificación correcta superiores al 88%, 96%, y 98% para Cooper's, Red-tailed y Sharp-Shinned, respectivamente.
 
-- Sin embargo, DBSCAN también presenta algunas limitaciones, como la exclusión de un pequeño porcentaje de individuos que no pertenecen a ningún cluster.
+Una característica interesante de DBSCAN es su capacidad para identificar datos que no se pueden clasificar claramente en ningún grupo predefinido. Esto se refleja en la categoría "Sin Clasificar" para Cooper's, que representa un 7.46% de los casos. Esto sugiere que DBSCAN puede ser más robusto en la identificación de patrones menos definidos o en la detección de posibles nuevas categorías.
 
-**Comparación:**
+**Comparación General:**
 
-Ambos algoritmos han mostrado una buena capacidad para identificar individuos de la especie Sharp-Shinned, pero k-means ha presentado dificultades con las especies Cooper’s y Red-tailed.
-
-En el contexto específico de nuestro conjunto de datos, mi opinión es que DBSCAN es más efectivo al identificar clusters mas afines a la distribución de nuestros datos. Aunque k-means proporciona una clasificación visual más clara, no es de utilidad a la hora de diferenciar individuos de las especies de halcon en base a sus atributos físicos. Por otro lado, DBSCAN encuentra patrones más detallados y hace una mejor identificación de individuos de las especies de halcones analizadas.
+En términos de precisión pura, K-means parece superar ligeramente a DBSCAN en este conjunto de datos específico, especialmente para Red-tailed y Sharp-Shinned. Sin embargo, la capacidad de DBSCAN para manejar datos no clasificados de manera explícita podría ser valiosa en situaciones donde la estructura de los grupos no es completamente clara o cuando se espera la presencia de clases no identificadas previamente.
