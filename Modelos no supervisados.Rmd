@@ -1,0 +1,1239 @@
+---
+title: "PEC 2 - Modelos no supervisados"
+author: "Paula Corbatón Álvarez"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    highlight: default
+    code_folding: show
+    number_sections: no
+    theme: cosmo
+    toc: yes
+    toc_float: true
+    toc_depth: 5
+    before_body: "<hr />"
+  pdf_document:
+    toc: true
+    toc_depth: 5
+    number_sections: true
+  word_document: default
+---
+
+<style>
+  h1 {
+    color: #31759f;
+    font-weight: 600;
+  }
+  h2 {
+    color: #4e89a3;
+    font-weight: 500;
+  }
+  h3 {
+    color: #6a9da6;
+    font-weight: 400;
+  }
+  h4 {
+    color: #7FB3B5;
+    font-weight: 400;
+  }
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(cluster)
+library(purrr)
+library(factoextra)
+library(gridExtra)
+
+library(dbscan)
+```
+
+**Ejercicio 1**
+
+1.1 Presenta el juego de datos, nombre y significado de cada columna, así como las distribuciones de sus valores.  
+
+1.2 Realiza un estudio aplicando el método K-means, similar al de los ejemplos 1.1 y 1.2
+
+
+**Ejercicio 2**
+
+2.1 Con el juego de datos proporcionado realiza un estudio aplicando DBSCAN y OPTICS, similar al del ejemplo 2 
+
+**Ejercicio 3**
+
+3.1 Realiza una comparativa de los métodos *k-means* y *DBSCAN* 
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+if (!require('Stat2Data')) install.packages('Stat2Data')
+library(Stat2Data)
+data("Hawks")
+```
+
+# 1.1 Presentación del juego de datos
+
+Para una primera exploración podemos utilizar la funcion glimpse que proporciona información sobre las variables del conjunto de datos, sus tipos de datos y una vista previa de las primeras filas: 
+
+```{r}
+glimpse(Hawks)
+```
+
+Si observamos la documentación del dataset, podemos ver que estas columnas representan lo siguiente:
+
+- **Month**: Código para el mes en que se realizó la captura de los datos. Los códigos van desde "8" que representa septiembre hasta "11" que representa diciembre.
+- **Day**: Fecha en el mes en que se realizaron las observaciones.
+- **Year**: Año en el que se recopilaron los datos, que va desde 1992 hasta 2003.
+- **CaptureTime**: Hora de la captura en formato HH:MM.
+- **ReleaseTime**: Hora de liberación en formato HH:MM.
+- **BandNumber**: Código de identificación de la banderola utilizada para marcar a las aves.
+- **Species**: Especie de la ave observada. Los códigos incluyen "CH" para Cooper's, "RT" para Red-tailed y "SS" para Sharp-Shinned.
+- **Age**: Código que indica la edad de la ave. "A" se refiere a un adulto y "I" a un inmaduro.
+- **Sex**: Código que indica el sexo de la ave. "F" representa a una hembra y "M" a un macho.
+- **Wing**: Longitud (en mm) de la pluma de ala primaria desde la punta hasta donde se une a la muñeca.
+- **Weight**: Peso corporal (en gramos) del ave.
+- **Culmen**: Longitud (en mm) del pico superior desde la punta hasta donde se encuentra con la parte carnosa del ave.
+- **Hallux**: Longitud (en mm) de la garra de matar.
+- **Tail**: Medición (en mm) relacionada con la longitud de la cola (inventada en MacBride Raptor Center).
+- **StandardTail**: Medición estándar de la longitud de la cola (en mm).
+- **Tarsus**: Longitud del hueso básico del pie (en mm).
+- **WingPitFat**: Cantidad de grasa en la axila del ala.
+- **KeelFat**: Cantidad de grasa en el esternón (medida por tacto).
+- **Crop**: Cantidad de material en el buche codificado de "1" a "0", donde "1" indica que está lleno y "0" indica que está vacío.  
+
+Ahora vamos a proceder a analizar la distribución de cada una de estas variables: 
+
+
+
+
+#### Variables categóricas:
+
+```{r}
+var_cat <- c("BandNumber", "Species", "Age", "Sex")
+
+par(mfrow=c(2, 1))  # Mostrar varios gráficos
+
+colores <- c("#AAB7B8", "#1ABC9C", "#F4D03F", "#F5B041") 
+
+# Iterar a través de las variables
+for (i in 1:length(var_cat)) {
+  variable <- var_cat[i]
+  barplot(table(Hawks[[variable]]), main = paste("Distribución de la variable", variable), xlab = variable, ylab = "Frecuencia", col = colores[i])
+}
+
+
+```
+
+Como podemos observar:
+
+- Como es de esperar, la columna BandNumber contiene un identificador único para cada registro.
+
+- La especie más observada es Red-tailed seguida de Sharp-Shinned y Cooper's tiene el menor número de observaciones.
+
+- Se han capturado mas individuos inmaduros que adultos. 
+
+- La variable sex contiene muchos valores vacíos, pero de los registrados, hay mas o menos la misma proporción de machos que de hembras. 
+
+
+#### Variables numéricas:
+
+```{r}
+var_num <- c("Month", "Year", "Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail", "Tarsus", "WingPitFat", "KeelFat", "Crop")
+
+par(mfrow=c(2, 1))
+
+colores <- c("#5DADE2", "#2980B9", "#F7DC6F", "#F8C471", "#E59866", "#D98880", "#D7BDE2", "#C39BD3", "#F1948A", "#F5B041", "#D68910", "#F1C40F")
+
+# Iterar a través de las variables 
+for (i in 1:length(var_num)) {
+  variable <- var_num[i]
+  hist(Hawks[[variable]], main = paste("Distribución de la variable", variable), xlab = variable, col = colores[i])
+}
+```
+
+
+Como podemos observar:
+
+- Los meses en los que más aves fueron capturadas son octubre y noviembre seguidos de diciembre. 
+
+- Los años en los que menos ejemplares se capturaron son 1995 y 1997
+
+- La longitud de la pluma de ala primaria más común en 400mm seguida de 200. Parece haber 2 grupos diferenciados.
+
+- En la variable weight se pueden ver dos grupos de peso bastante diferenciados. 
+
+- La variable culmen también parece mostrar dos grupos bastante diferenciados. 
+
+- Practicamente la totalidad de los ejemplares tienen una garra de matar que oscila entre 0 y 50mm
+
+- La medición de MacBride Raptor Center registra principalmente 2 grupos; uno con longitud de la cola por lo general de entre 200mm y 240mm y otro con longitud de la cola por lo general de entre 120 y 160 mm
+
+- La medición estandar de la cola coincide con la de MacBride Raptor Center en esta division de grupos. 
+
+- La longitud mas común del hueso básico del pie es de 80mm seguido de 50mm (nuevamente, observamos 2 grupos)
+
+- La cantidad de grasa en la axila del ala va de 0.0 a 3.0 con un mayor numero de valores entre 0.0 y 0.5
+
+- Los valores mas comunes de cantidad de grasa en el esternón son 2 y 3
+
+- La mayoría de los buches de los individuos capturados estaban medio vacíos. 
+
+
+#### Variables Day y Month
+
+Podemos crear un gráfico de barras apiladas por mes y por día de la siguiente forma: 
+
+```{r}
+ggplot(Hawks, aes(x = Day, fill = factor(Month))) +
+  geom_bar(position = "stack") +
+  labs(title = "Distribución de Días por Mes", x = "Día del Mes", y = "Cantidad de Observaciones") +
+  theme_minimal()
+
+```
+
+Este gráfico muestra la cantidad de observaciones para cada día en cada mes (cada color representa un mes, y la altura de las barras muestra la cantidad de observaciones para cada día del mes)
+
+
+#### Variables CaptureTime y ReleaseTime
+
+```{r}
+# convertimos a formato POSIXct
+CaptureTime_POSIXct <- as.POSIXct(Hawks$CaptureTime, format = "%H:%M")
+ReleaseTime_POSIXct <- as.POSIXct(Hawks$ReleaseTime, format = "%H:%M")
+#graficamos 
+par(mfrow = c(2, 1))
+hist(CaptureTime_POSIXct, main = "Distribución de Hora de Captura", xlab = "Hora de Captura", ylab = "Frecuencia", breaks = "hours", col="#A9DFBF")
+hist(ReleaseTime_POSIXct, main = "Distribución de Hora de Liberación", xlab = "Hora de Liberación", ylab = "Frecuencia", breaks = "hours", col="#A2D9CE")
+```
+
+
+## Análisis preeliminar de los datos
+
+
+
+Para finlaizar, es importante poner en contexto nuestros datos. Sabemos que las observaciones tienen 3 especies de aves y registros sobre individuos jovenes y adultos. Además nos proporciona información sobre cuando se recopilaron los datos y sobre los atributos físicos de los individuos observados. 
+
+Puesto que el objetivo de nuestro análisis es la agrupacion de estos datos debemos mantener en mente ambas dimensiones, la temporal y la que registra atributos físicos y tener en cuenta que pueden estar relacionadas con la especie y su edad.
+
+Aunque es probable que no observemos ninguna relacion, podemos visualizar en que momento se capturó qué tipo de ave para determinar si hay alguna relación entre estas dos variables. Algunas aves tienen rutas migratorias y puede ser que el avistamineto de halcones varíe según el mes. 
+
+Llama la atención la subdivision de los datos en dos grupos para algunas de las variables numéricas, esto se podría deber al tipo de especie, a la edad o al sexo de los individuos. Es poco probable que se deba el sexo del individuo puesto que, como observamos anteriormente la mayoría de los valores que contiene esta variable están indefinidos. 
+
+Así centraremos nuestro estudio en ver como se distribuyen las variables en base a la especie y la edad de los individuos.  
+
+#### Agrupacion en base a la variable Species
+
+Primero vamos a grupar los datos en base a la variable species (con valores CH, RT, SS), para cada gurpo haremos un histograma de la frecuencia de cada una de las siguientes variables: "Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail", "Tarsus", "WingPitFat", "KeelFat"
+
+```{r}
+# paletas de colores personalizadas para cada especie
+paletas_colores_species <- list(
+  CH = c("#9BDE91", "#AFF29A", "#97D1C1", "#D9F5AE", "#B8F5E3", "#68D1BB", "#95C7B8", "#A4C691", "#C0D8C4"),
+  
+  RT = c("#FFBE5C", "#FF645C", "#FA7914", "#FCA198", "#FF6D8F", "#FCBDE0", "#FCCCE0", "#FCE8C6", "#FCD276"),
+  
+  SS = c("#9C85EB", "#B0ACE6", "#8597E6", "#A3A8D6", "#BD9CEE", "#C785EB", "#B0C5E6", "#91ADE6", "#AFCBD6")
+)
+
+# subset e histogramas para cada variable
+for (species_value in c("CH", "RT", "SS")) {
+  
+  # subset para la especie actual
+  subset_data <- Hawks[Hawks$Species == species_value, ]
+  
+  # diseño de los gráficos
+  par(mfrow = c(3, 3)) 
+  
+  # iterar a través de las variables y crear histogramas 
+  for (i in 1:length(paletas_colores_species[[species_value]])) {
+    variable <- c("Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail", "Tarsus", "WingPitFat", "KeelFat")[i]
+    hist(subset_data[[variable]], main = paste("Distribución de", variable, "en", species_value), xlab = variable, col = paletas_colores_species[[species_value]][i], border = "black")
+  }
+}
+
+```
+
+Con esta información podemos crear un perfil para cada tipo de ave: 
+
+**Cooper’s (CH)**
+Son aves de alas pequeñas y poco peso, su pico superior es mediano tirando a pequeño y tienen una garra de matar mediana, sin embargo tienen una cola lagra y un hueso basico del pie grande 
+
+**Red-tailed (RT)**
+Son aves de alas grandes y muy pesadas, su pico superior es grande, tienen una cola grande y un hueso básico del pie grande. Parecen ser aves de gran embergadura y peso (en comparación con las demás especies observadas). 
+
+**Sharp-Shinned (SS)**
+Tiene alas muy pequeñas y son muy ligeros, su pico superior es muy pequeño, tienen una garra de matar pequeña, tienen una cola pequeña y un hueso basico del pie pequeño. Parecen ser aves de poca embergadura y peso (en comparación con las demás especies observadas). 
+
+Si buscamos en internet imágenes de cada una de estas aves obtenemos: 
+
+<div style="display: flex; flex-direction: row;, gap= 10px">
+<p align="center">
+  <img src="/Users/Belle/Library/CloudStorage/GoogleDrive-cienciadepatos@gmail.com/Mi unidad/cuarto-cuatri/Minería de datos/pec 2/CH.png" alt="CH" width="200px">
+  <br>Cooper’s
+</p>
+
+<p align="center">
+  <img src="/Users/Belle/Library/CloudStorage/GoogleDrive-cienciadepatos@gmail.com/Mi unidad/cuarto-cuatri/Minería de datos/pec 2/RT.png" alt="RT" width="200px">
+  <br>Red-tailed
+</p>
+
+<p align="center">
+  <img src="/Users/Belle/Library/CloudStorage/GoogleDrive-cienciadepatos@gmail.com/Mi unidad/cuarto-cuatri/Minería de datos/pec 2/SS.png" alt="SS" width="200px">
+  <br>Sharp-Shinned
+</p>
+</div>
+
+Quiero recalcar que la descripcion de las aves la he hecho antes de conocer su aspecto y me ha basado unicamente en los datos que estamos analizando. Después de conocer el aspecto de las aves no he hecho ninguna edición de su descripción. 
+
+
+#### Agrupacion en base a la variable Age
+
+Ahora vamos a agrupar los datos en base a la variable age (con valores A, I). Para cada gurpo haremos un histograma de la frecuencia de cada una de las siguientes variables: "Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail", "Tarsus", "WingPitFat", "KeelFat"
+
+
+```{r}
+paletas_colores_age <- list(
+  A = c("#9BDE91", "#AFF29A", "#97D1C1", "#D9F5AE", "#B8F5E3", "#68D1BB", "#95C7B8", "#A4C691", "#C0D8C4"),
+  
+  I = c("#9C85EB", "#B0ACE6", "#8597E6", "#A3A8D6", "#BD9CEE", "#C785EB", "#B0C5E6", "#91ADE6", "#AFCBD6")
+)
+
+# subset e histogramas para cada variable agrupando por edad
+for (age_value in c("A", "I")) {
+  
+  # subset para la edad actual
+  subset_data_age <- Hawks[Hawks$Age == age_value, ]
+  
+  par(mfrow = c(3, 3))
+  
+  # iterar a las variables y crear histogramas
+  for (i in 1:length(paletas_colores_age[[age_value]])) {
+    variable <- c("Wing", "Weight", "Culmen", "Hallux", "Tail", "StandardTail", "Tarsus", "WingPitFat", "KeelFat")[i]
+    hist(subset_data_age[[variable]], main = paste("Distribución de", variable, "en", age_value), xlab = variable, col = paletas_colores_age[[age_value]][i], border = "black")
+  }
+}
+```
+
+Como se puede observar, la clasificaión sigue siendo desigual por lo que no parece que la división sea debido a la edad. 
+
+Esto tiene sentido porque por lo general, las aves tienen un desarrollo rápido y para cuando son capaces de volar para salir del nido tienen unas dimensiones similares a las de las aves adultas. 
+
+
+#### Agrupacion de las especies en base al momento en el que fueron capturadas
+
+Podemos crear un gráfico en el que se observe la cantidad de aves registradas según el mes del año: 
+
+```{r}
+ggplot(Hawks, aes(x = factor(Month), fill = Species)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(x = "Mes",
+       y = "Frecuencia") +
+  scale_x_discrete(labels = c("8" = "Sep", "9" = "Oct", "10" = "Nov", "11" = "Dec")) +
+  scale_fill_manual(values = c("CH" = "#6dbbf2", "RT" = "#ca5fed", "SS" ="#f5b74c"))
+
+```
+
+Como se puede observar a simple vista no hay ningún indicio de que el avistamiento de determinados tipos de halcones varíe según el mes. 
+
+- Los gavilanes de Cooper migran desde el norte de América del Norte, donde crían, hasta regiones del sur en México y América Central durante los meses de otoño e invierno.
+
+- Los halcones red-tailed se desplazan desde áreas del norte donde crían, hacia regiones del sur durante el otoño e invierno. Sus áreas de invernada suelen encontrarse en América del Norte, desde el sur de Canadá hasta México. 
+
+- Los halcones sharp-shinned, también migran desde sus áreas de cría en el norte hacia regiones del sur, específicamente en América del Norte, durante el otoño e invierno. 
+
+Basándonos en la presencia de halcones Coopers, red-tailed y sharp-shinned en octubre, noviembre y diciembre, es probable que los datos hayan sido tomados en una región del norte de América del Norte. Esto podría incluir áreas como partes de Canadá, el noreste de los Estados Unidos o regiones del noroeste de los Estados Unidos. Estas áreas son conocidas por ser puntos clave en las rutas de migración de aves rapaces durante el otoño.  
+
+
+# 1.2 Estudio con el método de K-means
+
+## Preparacion de los datos
+
+
+#### Selección de variables de interés
+
+Como vimos anteriormente la variable "BandNumber" contiene identificadores únicos para cada registro, lo que significa que cada valor es único y no comparte similitud con otros valores. En el contexto de K-Means, donde se agrupan observaciones en función de la similitud, no tiene sentido analizar una variable con valores únicos, ya que no habría agrupamientos significativos.
+
+Tampoco tiene sentido mantener la variable Crop puesto que esta informa de la cantidad de material en el buche y esto es un dato mas bien circunstancial, que no nos ayudará a hacer ninguna clasificación en nuestro estudio
+
+
+Como hemos podido observar en la distribucion de la variable sex esta contiene mas valores vacíos que información sobre el sexo de los ejemplares capturados, es por este motivo que la mejor práctica es descartarla ya que solo aporta ruido al análisis. 
+
+Así, vamos a crear un nuevo conjunto de datos que contenga todas las variables excepto "BandNumber", "Crop" y  "Sex": 
+
+```{r}
+df <- subset(Hawks, select = -c(BandNumber, Crop, Sex))
+```
+
+Como podemos observar en los gráficos del análisis preeliminar, las variables que parecen mas significativas a la hora de clasificar los datos son: 
+
+- Wing 
+- Weight 
+- Culmen
+- Hallux 
+- Tail
+- Tarsus
+
+Sin embargo considero que es mejor no apresurarnos a reducir el datset puesto que a la hora de analizar las clasificaciones, algunos datos que ahora pueden parecer irrelevantes, pueden resultar de utilidad y podemos descubrir nuevas relaciones entre las variables. 
+
+#### Valores faltantes
+
+```{r}
+# Función para calcular el porcentaje de valores faltantes por columna y detectar NA/NaN
+percentage_missing <- function(data) {
+  # Cantidad de valores faltantes por columna
+  missing_count <- sapply(data, function(x) sum(is.na(x) | is.nan(x)))
+  
+  # Porcentaje de valores faltantes
+  total_rows <- nrow(data)
+  missing_percentage <- (missing_count / total_rows) * 100
+  
+  # Dataframe con los resultados
+  result <- data.frame(Missing_Count = missing_count, Missing_Percentage = missing_percentage)
+  
+  return(result)
+}
+
+print(percentage_missing(df))
+```
+
+Como podemos observar hay un porcentaje bastante alto (entre 91% y 93%) de valores nulos en las columnas: 
+
+- Tarsus
+- WingPitFat
+
+También hay alrededor de un 37 % de valores nulos en las columnas:
+
+- StandardTail
+- KeelFat
+
+Y un porcentaje muy bajo (entre 0% y 2%) de valores nulos en las columnas: 
+
+- Wing
+- Weight
+- Culmen
+- Hallux
+
+Segun la teoría deberíamos hacer lo siguiente: 
+
+* Entre el 50 % y el 95 % de valores nulos, estos no se rellenan. 
+* Por debajo del 50 % de valores nulos, estos se rellenan. 
+
+Los valores faltantes pueden causar problemas en el cálculo de distancias y centroides, lo que afecta la calidad de los clústeres en K-means. Para evitar esto, excluiré del análisis las columnas con un porcentaje alto de valores nulos y rellenaré aquellas con un menor porcentaje. 
+
+Así vamos a excluir las variables: 
+
+- Tarsus
+- WingPitFat
+
+Además las variables Tail y StandardTail miden las dos la longitud de la cola, como esta última contiene valores faltantes la eliminaremos manteniendo Tail como la medida de longitu de la cola. 
+
+```{r}
+df <- subset(df, select = -c(Tarsus, WingPitFat, StandardTail))
+```
+
+Las variables que queremos "rellenar" se distribuyen de la siguiente forma: 
+
+```{r}
+par(mfrow = c(1, 5))
+boxplot(Hawks$KeelFat, main = "KeelFat", ylab = "Cantidad de grasa en el esternón", col = "#D68910")
+
+boxplot(Hawks$Wing, main = "Wing", ylab = "Longitud de la pluma del ala primaria", col = "#F7DC6F")
+boxplot(Hawks$Weight, main = "Weight", ylab = "Peso corporal del ave", col = "#F8C471")
+boxplot(Hawks$Culmen, main = "Culmen", ylab = "Longitud del pico superior", col = "#E59866")
+boxplot(Hawks$Hallux, main = "Hallux", ylab = "Longitud de la garra de matar", col = "#D98880")
+```
+
+Podemos rellenar los valores faltantes con la mediana y la media según describan mejor a los datos. Es importante destacar que nuestros datos contienen informacion sobre 3 tipos de especie distintos además de ejemplares inmaduros y adultos. Dado que los datos que queremos rellenar miden las características físicas del ave y estas (como hemos visto anteriormente) varían mucho en función de la especie y de la edad deberemos tener en cuenta estos dos factores a la hora de rellenarlas. 
+
+Con el siguiente código identificamos los valores NA y encontramos a que grupo de edad y a que especie pertenece el individuo que se esta tratando para sustituir el valor con esta media
+
+**KeelFat**
+
+```{r}
+media_peso_especie_edad <- aggregate(KeelFat ~ Species + Age, data = df, FUN = function(x) mean(x, na.rm= TRUE))
+
+for (i in 1:nrow(df)) {
+  # si el valor de 'KeelFat'es NA, buscamos la media que corresponde a la especie y edad
+  if (is.na(df$KeelFat[i])) {
+    # filtramos el df según la especie y edad
+    media_especie_edad <- media_peso_especie_edad$KeelFat[media_peso_especie_edad$Species == df$Species[i] & media_peso_especie_edad$Age == df$Age[i]]
+    # imputamos la media que corresponda al registro NA
+    df$KeelFat[i] <- media_especie_edad
+  }
+}
+
+# verificamos que no queden valores NA en la columna
+if (!any(is.na(df$KeelFat))) {
+  cat("Todos los valores NA en la columna 'KeelFat' han sido correctamente imputados")
+} else {
+  cat("Aun quedan valores NA en la columna 'KeelFat'. \n")
+}
+```
+
+Utilizamos el mismo procedimiento para el resto de variables: 
+
+**Wing**
+
+```{r}
+media_peso_especie_edad <- aggregate(Wing ~ Species + Age, data = df, FUN = function(x) mean(x, na.rm= TRUE))
+
+for (i in 1:nrow(df)) {
+  if (is.na(df$Wing[i])) {
+    media_especie_edad <- media_peso_especie_edad$Wing[media_peso_especie_edad$Species == df$Species[i] & media_peso_especie_edad$Age == df$Age[i]]
+    df$Wing[i] <- media_especie_edad
+  }
+}
+
+if (!any(is.na(df$Wing))) {
+  cat("Todos los valores NA en la columna 'Wing' han sido correctamente imputados")
+} else {
+  cat("Aun quedan valores NA en la columna 'Wing'. \n")
+}
+```
+
+**Weight**
+
+```{r}
+media_peso_especie_edad <- aggregate(Weight ~ Species + Age, data = df, FUN = function(x) mean(x, na.rm= TRUE))
+
+for (i in 1:nrow(df)) {
+  if (is.na(df$Weight[i])) {
+    media_especie_edad <- media_peso_especie_edad$Weight[media_peso_especie_edad$Species == df$Species[i] & media_peso_especie_edad$Age == df$Age[i]]
+    df$Weight[i] <- media_especie_edad
+  }
+}
+
+if (!any(is.na(df$Weight))) {
+  cat("Todos los valores NA en la columna 'Weight' han sido correctamente imputados")
+} else {
+  cat("Aun quedan valores NA en la columna 'Weight'. \n")
+}
+```
+
+**Culmen**
+
+```{r}
+media_peso_especie_edad <- aggregate(Culmen ~ Species + Age, data = df, FUN = function(x) mean(x, na.rm= TRUE))
+
+for (i in 1:nrow(df)) {
+  if (is.na(df$Culmen[i])) {
+    media_especie_edad <- media_peso_especie_edad$Culmen[media_peso_especie_edad$Species == df$Species[i] & media_peso_especie_edad$Age == df$Age[i]]
+    df$Culmen[i] <- media_especie_edad
+  }
+}
+
+if (!any(is.na(df$Culmen))) {
+  cat("Todos los valores NA en la columna 'Culmen' han sido correctamente imputados")
+} else {
+  cat("Aun quedan valores NA en la columna 'Culmen'. \n")
+}
+```
+
+**Hallux**
+
+```{r}
+media_peso_especie_edad <- aggregate(Hallux ~ Species + Age, data = df, FUN = function(x) mean(x, na.rm= TRUE))
+
+for (i in 1:nrow(df)) {
+  if (is.na(df$Hallux[i])) {
+    media_especie_edad <- media_peso_especie_edad$Hallux[media_peso_especie_edad$Species == df$Species[i] & media_peso_especie_edad$Age == df$Age[i]]
+    df$Hallux[i] <- media_especie_edad
+  }
+}
+
+if (!any(is.na(df$Hallux))) {
+  cat("Todos los valores NA en la columna 'Hallux' han sido correctamente imputados")
+} else {
+  cat("Aun quedan valores NA en la columna 'Hallux'. \n")
+}
+```
+
+#### Tratamiento de variables categóricas
+
+Para poder incluir las variables categóricas debemos transfromarlas en númericas, las variables categoricas que hemos visto anteriormente son: 
+
+- **Species**: Especie de la ave observada. Los códigos incluyen "CH" para Cooper's, "RT" para Red-tailed y "SS" para Sharp-Shinned.
+- **Age**: Código que indica la edad de la ave. "A" se refiere a un adulto y "I" a un inmaduro.
+
+Para convertirlas de categoricas a numericas utilizaremos Label encoding. Así le asignaremos un numero único a cada categoría. Tambien vamos a convertir las columas de tipo factor a numerico: 
+
+```{r}
+df$Species <- as.numeric(factor(df$Species, levels = c("CH", "RT", "SS"), labels = c(1, 2, 3)))
+df$Age <- as.numeric(factor(df$Age, levels = c("A", "I"), labels = c(1, 2)))
+
+df$CaptureTime <- as.numeric(df$CaptureTime)
+df$ReleaseTime <- as.numeric(df$ReleaseTime)
+```
+
+#### Eliminar outliers
+
+Como hemos podido observar en los gráficos para los valores faltantes, algunas variables presentan outliers o valores extremos, estas variables son: 
+
+- KeelFat
+- Hallux
+
+Para eliminar los outliers podemos utilizar el método Tukey.
+
+Este método se basa en el rango intercuartílico (IQR), que es la diferencia entre el tercer cuartil (Q3) y el primer cuartil (Q1) de los datos.
+
+El procedimiento de Tukey para identificar outliers es el siguiente:
+
+1. **Calcular el IQR:** \(IQR = Q3 - Q1\).
+
+2. **Definir los límites:** Calcular límites superior e inferior como \(Q3 + 1.5 \times IQR\) y \(Q1 - 1.5 \times IQR\), respectivamente.
+
+3. **Identificar outliers:** Cualquier valor que esté por encima del límite superior o por debajo del límite inferior se considera un outlier.
+
+**KeelFat** 
+
+```{r}
+# IQR
+Q1 <- quantile(df$KeelFat, 0.25)
+Q3 <- quantile(df$KeelFat, 0.75)
+IQR <- Q3 - Q1
+
+# límites para identificar outliers
+lower_limit <- Q1 - 1.5 * IQR
+upper_limit <- Q3 + 1.5 * IQR
+
+# índices de los outliers
+outliers <- which(df$KeelFat < lower_limit | df$KeelFat > upper_limit)
+
+# eliminamos los outliers del conjunto de datos
+df <- df[-outliers, ]
+```
+
+**Hallux**
+
+```{r}
+Q1 <- quantile(df$Hallux, 0.25)
+Q3 <- quantile(df$Hallux, 0.75)
+IQR <- Q3 - Q1
+
+lower_limit <- Q1 - 1.5 * IQR
+upper_limit <- Q3 + 1.5 * IQR
+
+outliers <- which(df$Hallux < lower_limit | df$Hallux > upper_limit)
+
+df <- df[-outliers, ]
+```
+
+Así el boxplot de KeelFat y Hallux quedaría de la siguiente forma: 
+
+```{r}
+par(mfrow = c(1, 2))
+boxplot(df$KeelFat, main = "KeelFat", col = "#D68910")
+boxplot(df$Hallux, main = "Hallux", col = "#D98880")
+```
+
+Como se puede observar, ya no quedan outliers. 
+
+
+#### Escalar los datos
+
+
+A continuacion vamos a centrar (restar la media) y escalar (dividir por la desviación estándar) para los datos que desde un principio representaban atributos mediante números: 
+
+- **Wing**: Longitud (en mm) de la pluma de ala primaria desde la punta hasta donde se une a la muñeca.
+- **Weight**: Peso corporal (en gramos) del ave.
+- **Culmen**: Longitud (en mm) del pico superior desde la punta hasta donde se encuentra con la parte carnosa del ave.
+- **Hallux**: Longitud (en mm) de la garra de matar.
+- **Tail**: Medición (en mm) relacionada con la longitud de la cola (inventada en MacBride Raptor Center).
+- **KeelFat**: Cantidad de grasa en el esternón (medida por tacto).
+
+```{r}
+# Lista de nombres de las variables numéricas a escalar
+vars_to_scale <- c("Wing", "Weight", "Culmen", "Hallux", "Tail", "KeelFat")
+
+# Escalamos las variables numéricas y mantenemos las demás sin cambios
+analysis_data <- df %>%
+  mutate(across(all_of(vars_to_scale), ~scale(.)))
+
+head(analysis_data)
+```
+
+
+
+
+
+
+
+## Determinación del número de clústeres
+
+### Elbow method
+
+Es importante ser conscientes de que el objetivo del método del codo (Elbow Method) en análisis de clusters es determinar el número óptimo de grupos o clusters en un conjunto de datos. Este método se basa en la idea de que la suma de los cuadrados de las distancias intra-cluster, disminuye a medida que aumenta el número de clusters, pero a partir de cierto punto, los beneficios de agregar más clusters comienzan a disminuir. 
+
+El método del codo consiste en calcular la suma de cuadrados dentro del cluster para diferentes valores de k (número de clusters) y trazar un gráfico que represente la suma de cuadrados en función de k. 
+
+El objetivo de crear el siguiente gráfico es encontrar el número de clusters que proporciona la mejor estructura de agrupamiento posible, evitando tanto la subagrupación como la sobreagrupación. 
+
+```{r}
+# Funcion para calculara la suma de los cuadrados 
+wss <- function(k) {
+  kmeans(analysis_data, k)$tot.withinss
+}
+
+k.values <- 1:10
+
+wss_values <- map_dbl(k.values, wss)
+
+plot(k.values, wss_values,
+       type="b",  
+       xlab="Numero de clusters K",
+       ylab="Suma de cuadrados")
+```
+
+Como podemos observar el número optimo de clusters sería 2 o 3
+
+
+### Average Silhouette
+
+El objetivo del método de Silhouette es evaluar la calidad de un agrupamiento (clustering) y determinar cómo de bien se encuentran las observaciones dentro de su respectivo grupo. 
+
+Para ello compara la distancia promedio entre una observación y todas las demás observaciones en su propio grupo (distancia intra-cluster) con la distancia promedio entre la observación y todas las observaciones en el grupo más cercano (distancia inter-cluster). 
+
+La medida de Silhouette varía entre -1 y 1. Un valor de Silhouette cercano a 1 indica que una observación está bien asignada a su grupo y está bien separada de los demás grupos. Por otro lado, un valor cercano a -1 indica que una observación podría estar asignada incorrectamente a su grupo y muestra una mayor similitud con otros grupos.
+
+```{r}
+# Funcion que calcula Silhouette para k clusters
+avg_sil <- function(k) {
+  km.res <- kmeans(analysis_data, centers = k)
+  ss <- silhouette(km.res$cluster, dist(analysis_data))
+  mean(ss[, 3])
+}
+
+k.values <- 2:10
+
+avg_sil_values <- map_dbl(k.values, avg_sil)
+
+plot(k.values, avg_sil_values,
+       type = "b", pch = 19, frame = FALSE, 
+       xlab = "Numbero de clusters K",
+       ylab = "Silhouette")
+```
+
+Como podemos observar, Silhouette sugiere que el numero de clusters mas óptimo es 2 seguido de 3 y 4. 
+
+
+
+## K-means
+
+Vamos a representar la agrupacion de nuestros datos en 2 clusters: 
+
+```{r}
+k2 <- kmeans(analysis_data, centers = 2)
+fviz_cluster(k2, geom = "point", data = analysis_data) + ggtitle("k = 2")
+```
+
+
+Podemos representar también agrupaciones con mas números de clusters para compararlas unas con otras
+
+```{r}
+k3 <- kmeans(analysis_data, 3)
+k4 <- kmeans(analysis_data, centers = 4)
+k5 <- kmeans(analysis_data, centers = 5)
+
+# plots 
+p1 <- fviz_cluster(k2, geom = "point", data = analysis_data) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point",  data = analysis_data) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point",  data = analysis_data) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point",  data = analysis_data) + ggtitle("k = 5")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+En un principio podía parecer que al crear mas clusters los datos se dividirían en franjas verticales según como estan distribuidos pero no es así. 
+
+Claramente estamos utilizando demasiados datos y se está nublando la clasificación. 
+
+
+Para tratar de obtener una division en clusters mas clara podemos hacer una selección de nuestras variables en función de lo que queremos estudiar. Ahora mismo hemos hecho el agrupamiento en clusters de los datos con las siguientes variables: 
+
+```{r}
+print(colnames(analysis_data))
+```
+
+Podemos retomar la idea de atributos físicos que expuse anteriormente, así podemos seleccionar las variables que describen las características físicas de las aves de una forma significativa: 
+
+```{r}
+subset_physical_attributes <- analysis_data[, c("Wing", "Weight", "Culmen", "Hallux", "Tail")]
+```
+
+
+```{r}
+k2f <- kmeans(subset_physical_attributes, centers = 2)
+k3f <- kmeans(subset_physical_attributes, centers = 3)
+k4f <- kmeans(subset_physical_attributes, centers = 4)
+k5f <- kmeans(subset_physical_attributes, centers = 5)
+
+# plots
+p1f <- fviz_cluster(k2f, geom = "point", data = subset_physical_attributes) + ggtitle("k = 2")
+p2f <- fviz_cluster(k3f, geom = "point",  data = subset_physical_attributes) + ggtitle("k = 3")
+p3f <- fviz_cluster(k4f, geom = "point",  data = subset_physical_attributes) + ggtitle("k = 4")
+p4f <- fviz_cluster(k5f, geom = "point",  data = subset_physical_attributes) + ggtitle("k = 5")
+
+grid.arrange(p1f, p2f, p3f, p4f, nrow = 2)
+```
+Como podemos observar, con estas variables, el algoritmo k means ofrece una clasificacion mucho mas clara. 
+
+Como sabemos que nuestros datos provienen de 3 especies de aves diferentes podemos analizar la agrupacion en 3 clusters según las variables y comparar la agrupacion en clusters y la clasificación real por especies. 
+
+Recordemos que en nuestro dataset las especies estan codificadas de la siguiente forma: Cooper’s como 1 (a continuación la representaremos en color negro),  Red-tailed como 2 (la representaremos en rojo) y Sharp-Shinned como 3(la representaremos en verde).
+
+
+```{r}
+# Ajustar los márgenes externos e internos
+par(oma = c(1, 1, 1, 1))  # Márgenes externos
+par(mar = c(4, 4, 2, 1))  # Márgenes internos
+par(mfrow = c(1, 2))
+
+cluster_colors <- c("#ca5fed", "#6dbbf2", "#f5b74c")
+#weigth y wing
+p12f_k3 <- plot(subset_physical_attributes[c(1,2)], col=cluster_colors[k3f$cluster], main="Clasificación k-means")
+p12f_r3 <- plot(subset_physical_attributes[c(1,2)], col=as.factor(analysis_data$Species), main="Clasificación real")
+#hallux y culmen
+p34f_k3 <- plot(subset_physical_attributes[c(3,4)], col=cluster_colors[k3f$cluster], main="Clasificación k-means")
+p34f_r3 <- plot(subset_physical_attributes[c(3,4)], col=as.factor(analysis_data$Species), main="Clasificación real")
+#wing y Tail
+p56f_k3 <- plot(subset_physical_attributes[c(1,5)], col=cluster_colors[k3f$cluster], main="Clasificación k-means")
+p56f_r3 <- plot(subset_physical_attributes[c(1,5)], col=as.factor(analysis_data$Species), main="Clasificación real")
+```
+
+
+Como podemos observar k means no suele confundir los grupos de Sharp-Shinned (en amarillo en k means y verde en la clasificacion real) y Red-tailed (en morado en k means y rojo en la clasificacion real). Sin embargo tiende a confundir los individuos de la especie Cooper’s (azul en k means y negro en la clasificación real) con Red-tailed y Sharp-Shinned. 
+
+Si retomamos las conclusiones que obtuvimos en el analisis preeliminar esta confusión tiene cierto sentido puesto que Sharp-Shinned tenia una embergadura pequeña, Red-tailed tenía una embergadura bastante grande y Cooper’s se encontraba en la media. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 2 Estudio aplicando DBSCAN y OPTICS
+
+Primero vamos a realizar una ordenación de los datos, para ello ejecutamos el algoritmo OPTICS (Ordering Points To Identify the Clustering Structure)
+
+Utilizamos minPts=10 lo que significa que para que un punto sea considerado un "punto central" al menos 10  puntos deben estar dentro del radio especificado (eps). Un valor más alto de minPts resultará en clústeres más estrictos, ya que requerirá que los puntos sean más densos para formar un clúster.
+
+Los puntos que tienen menos de minPts vecinos, pero están dentro del radio eps de algún punto central, se consideran "puntos de borde". Los puntos que no son ni centrales ni de borde se consideran "puntos de ruido".
+
+```{r}
+df_optics <- optics(df, minPts = 10, eps = 450)
+df_optics
+
+```
+
+
+Creamos un diagrama de accesibilidad: 
+
+```{r}
+plot(df_optics)
+# Trazar líneas horizontales 
+abline(h = 130, col = "red", lty = 5) 
+abline(h = 90, col = "blue", lty = 2)
+```
+
+
+En esta gráfica el eje x representa el ordenamiento de los puntos según OPTICS y el eje y representa la distancia de alcanzabilidad.
+
+
+Así los valles representan áreas donde la distancia de alcanzabilidad es baja. Estos valles indican la presencia de clústeres, y la profundidad del valle sugiere la densidad del clúster. Cuanto más profundo sea el valle, mayor será la densidad del clúster. Por otro lado, las cimas representan puntos que están entre agrupaciones. Estos puntos son candidatos a ser considerados outliers o puntos que no pertenecen claramente a un clúster.
+
+
+Dependiendo de a que altura cortemos el gráfico podremos obtener 2 (linea roja) o 3 (linea azul) clusters. 
+
+Podemos hacer esta division de la siguiente forma: 
+
+```{r}
+div_2 <- extractDBSCAN(df_optics, eps_cl = 130)
+par(mfrow = c(1, 2))
+plot(div_2)
+hullplot(df, div_2)
+```
+
+Como se puede observar la grafica se divide en 2 grupos (rojo y verde). Las partes marcadas en negro representan outliers. 
+
+Podemos disminuir el valor de eps_cl así obtendremos 3 clusters: 
+
+```{r}
+div_3 <- extractDBSCAN(df_optics, eps_cl = 80)
+par(mfrow = c(1, 2))
+plot(div_3)
+hullplot(df, div_3)
+```
+
+Podemos ver para este caso como se están distribuyendo las especies según que cluster de la siguiente forma:  
+
+```{r}
+# df con los resultados del clustering
+resultados_cluster_optics <- data.frame(
+  Species = analysis_data$Species,  
+  Cluster = div_3$cluster
+)
+
+# contabilizar las ocurrencias
+contadores <- table(resultados_cluster_optics$Species, resultados_cluster_optics$Cluster)
+rownames(contadores) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+
+print(contadores)
+```
+
+Como podemos observar, a pesar de utilizar todas las variables la clasificación es bastante buena. 
+
+El grupo 0 muestra las observaciones que se han excluido de la clasificación mientras que los grupos 1, 2 y 3 muestran el numero de individuos asignados a cada cluster. 
+
+Como podemos observar:
+
+- Cooper’s se ha clasificado 1 individuo en el cluster 1,  51 en el cluster 2 y 4 en el cluster 3. Se han excluido 11 individuos.
+- Red-tailed se han clasificado 520 en el cluster 1. Se han excluido 23 individuos.
+- Sharp-Shinned se han clasificado 191 individuos en el cluster 3 y 1 en el cluster 2. No se ha excluido ningún individuo.
+
+
+Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y el cluster 3 a Sharp-Shinned.
+
+El grupo peor clasificado ha sido **Cooper’s** con un 76.11% de las observaciones clasificadas correctamente, un 16.41% de los datos sin clasificar en nungún grupo, y un 7.46% de los datos clasificados en un grupo erróneo.
+
+El mejor grupo clasificado ha sido **Sharp-Shinned** con un 99.47% de las observaciones clasificadas correctamente y solo un 0.52% de los datos clasificados en un grupo erróneo.
+
+**Red-tailed** tambien ha clasificado correctamente la mayoría de sus observaciones (un 95.76%) y ha dejado un 4.23% de los datos sin clasificar.
+
+Podemos resumir esta información en la siguiente tabla: 
+
+```{r}
+results_all_var <- matrix(c(76.11, 7.46, 16.41,
+                         99.47, 0.52, 0,
+                         95.76, 4.23, 0),
+                       nrow = 3, byrow = TRUE,
+                       dimnames = list(c("Cooper’s", "Sharp-Shinned", "Red-tailed"),
+                                       c("Clasificado Correctamente", "Clasificado Erróneamente", "Sin Clasificar")))
+
+print(results_all_var)
+```
+
+Recordamos que estas clasificaciones las hemos obtenido al utilizar las variables:
+
+- Month       
+- Day         
+- Year        
+- CaptureTime 
+- ReleaseTime 
+- Species     
+- Age         
+- Wing       
+- Weight      
+- Culmen      
+- Hallux      
+- Tail        
+- KeelFat
+
+
+Podemos retomar la idea de trabajar con las variables relativas a atributos físicos de las aves y ver como se agrupan los datos de esta manera. Así, trabajaremos con las siguientes variables:
+
+- Wing 
+- Weight 
+- Culmen 
+- Hallux 
+- Tail
+
+Para ello retomamos el subset de atributos físicos que utilizamos en el ejercicio anterior: 
+
+```{r}
+physical_optics <- optics(subset_physical_attributes, minPts = 10)
+physical_optics
+```
+
+```{r}
+plot(physical_optics)
+```
+
+Como podemos observar, con estos datos podemos obtener 2, 3, 4 o incluso 5 grupos:
+
+
+```{r}
+div_physical_2 <- extractDBSCAN(physical_optics, eps_cl = 1)
+div_physical_3 <- extractDBSCAN(physical_optics, eps_cl = 0.8)
+div_physical_4 <- extractDBSCAN(physical_optics, eps_cl = 0.5)
+div_physical_5 <- extractDBSCAN(physical_optics, eps_cl = 0.3)
+
+par(mfrow = c(2, 2))
+plot(div_physical_2)
+hullplot(df, div_physical_2)
+plot(div_physical_3)
+hullplot(df, div_physical_3)
+plot(div_physical_4)
+hullplot(df, div_physical_4)
+plot(div_physical_5)
+hullplot(df, div_physical_5)
+
+```
+
+
+Nuevamente podemos analizar la calidad de la agrupación para 3 clusters:
+
+```{r}
+resultados_cluster_selección <- data.frame(
+  Species = analysis_data$Species,  
+  Cluster = div_physical_3$cluster
+)
+contadores <- table(resultados_cluster_selección$Species, resultados_cluster_selección$Cluster)
+rownames(contadores) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+
+print(contadores)
+```
+
+Como podemos observar: 
+
+- Cooper’s se ha clasificado 1 individuo en el cluster 1, 59 en el cluster 2 y 2 en el cluster 3. Se han excluido 5 individuos.  
+- Red-tailed se han clasificado 525 en el cluster 1. Se han excluido 18 individuos.   
+- Sharp-Shinned se han clasificado 190 individuos en el cluster 3 y 1 en el cluster 2. Se ha excluido 1 individuo.   
+
+
+Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y el cluster 3 corresponde a  Sharp-Shinned
+
+El grupo peor clasificado ha sido **Cooper’s** donde un 88.05% de los datos se han clasificado correctamente, un 7.46% no han sido clasificados en nungún grupo, y un 4.47% de los datos ha sido clasificado en un grupo erróneo. 
+
+El mejor grupo clasificado ha sido **Sharp-Shinned** con un 98.95% de las observaciones clasificadas correctamente, un 0.52% de las observaciones clasificados en un grupo erróneo y un 0.52% de los datos sin clasificar. 
+
+**Red-tailed** tambien ha clasificado correctamente la mayoría de sus observaciones (un 96.68%) y ha dejado un 3.31% de los datos sin clasificar. 
+
+Nuevamente, podemos resumir esta informacion en la siguiente tabla: 
+
+```{r}
+results_selected_var <- matrix(c(88.05, 4.47, 7.46,
+                                   98.95, 0.52, 0.52,
+                                   96.68, 3.31, 0),
+                                 nrow = 3, byrow = TRUE,
+                                 dimnames = list(c("Cooper’s", "Sharp-Shinned", "Red-tailed"),
+                                                 c("Clasificado Correctamente", "Clasificado Erróneamente", "Sin Clasificar")))
+print(results_selected_var)
+```
+
+
+Para esta selección de datos podemos utilizar el método xi. Este método se utiliza para extraer un clustering jerárquico en función de la variación de la densidad relativa, esto puede resultar en la identificación de subclusters dentro de clusters más grandes.
+
+El parametro xi controla la influencia de la variación de densidad en la identificación de clusters. Un valor más alto de xi dará lugar a una identificación más estricta de clusters en función de la variación de densidad.
+
+Podemos probar varios valores de xi y ver como se agrupan los datos: 
+
+```{r}
+physical_optics_xi_149 <- extractXi(physical_optics, xi = 0.149)
+physical_optics_xi_14 <- extractXi(physical_optics, xi = 0.14)
+physical_optics_xi_1 <- extractXi(physical_optics, xi = 0.1)
+plot(physical_optics_xi_1)
+plot(physical_optics_xi_149)
+```
+
+
+Como se puede observar, con un valor xi de 0.149 obtenemos 3 clusters pero se identifican muchos valores como outliers. 
+
+```{r}
+plot(physical_optics_xi_14)
+```
+
+
+Con xi = 0.14 obtenemos 4 clusters pero los valores que se descartan se reducen considerablemente. Podemos ver para este caso como se están distribuyendo las especies según que cluster de la siguiente forma:  
+
+
+```{r}
+resultados_cluster_xi <- data.frame(
+  Species = analysis_data$Species,  
+  Cluster = physical_optics_xi_14$cluster
+)
+contadores <- table(resultados_cluster_xi$Species, resultados_cluster_xi$Cluster)
+rownames(contadores) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+
+print(contadores)
+```
+
+Como podemos observar: 
+
+- Cooper’s se ha clasificado 1 individuo en el cluster 1 y 30 en el cluster 2. Se han excluido 34 individuos.  
+- Red-tailed se han clasificado 530 en el cluster 2. Se han excluido 13 individuos.   
+- Sharp-Shinned se han clasificado 94 individuos en el cluster 3 y 97 en el cluster 4. Se ha excluido 1 individuo.   
+
+
+Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y los clusters 3  y 4 corresponden a  Sharp-Shinned
+
+El grupo peor clasificado ha sido **Cooper’s** donde un 50.74% de los datos no han sido clasificados en nungún grupo, y un 4.47% de los datos ha sido clasificado en un grupo erróneo. 
+
+Si contamos los grupos 3 y 4 como uno solo, el mejor grupo clasificado ha sido **Sharp-Shinned** con un 99.47% de las observaciones clasificadas correctamente y solo un 0.52% de los datos sin clasificar. 
+
+**Red-tailed** tambien ha clasificado correctamente la mayoría de sus observaciones (un 97.6%) y solo ha dejado un 2.4% de los datos sin clasificar. 
+
+Como ya comenté anteriormente tiene sentido que Cooper’s sea el tipo de halcón peor clasificado puesto que sus medidas se encuentran entre las de Red-tailed y Sharp-Shinned. Además es de la especie de la que tenemos un menor número de observaciones: 
+
+```{r}
+especies <- table(resultados_cluster_selección$Species)
+rownames(especies) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+print(especies)
+```
+
+
+Podemos ordenar estos datos en la siguiente tabla: 
+
+```{r}
+results_selected_var_xi <- matrix(c(44.77, 4.47, 50.74,
+                                99.47, 0, 0.52,
+                                97.6, 0, 2.4),
+                              nrow = 3, byrow = TRUE,
+                              dimnames = list(c("Cooper’s", "Sharp-Shinned", "Red-tailed"),
+                                              c("Clasificado Correctamente", "Clasificado Erróneamente", "Sin Clasificar")))
+
+print(results_selected_var_xi)
+```
+
+Podemos comparar esta tabla con la que hicimos con los resultados de aplicar DBSCAN sobre la selección de las variables pertenecientes a atributos físicos:  
+
+```{r}
+print(results_selected_var)
+```
+
+Y con la que hicimos con los resultados de aplicar DBSCAN sobre el conjunto de datos con todas las variables:
+
+```{r}
+print(results_all_var)
+```
+
+
+Como podemos observar: 
+
+- La clasificación con la seleccion de variables y utilizando el método xi hace una identificación mas pobre de los individuos de Cooper’s pero es la que mejor identifica a Sharp-Shinned y Red-tailed
+
+- La clasificacion con la selección de variables y sin utilizar el parametro xi identifica mejor los datos pertenecientes a Cooper’s aunque también clasifica incorrectamente a mas individuos. 
+
+- La clasificación con todo el conjunto de datos es un punto intermedio entre estas dos por lo que no termina de ser de utilidad. 
+
+En base a esta información dependerá del propósito de nuestro análisis que método y que variables utilizar.
+
+Si por ejemplo queremos obtener una mejor clasificación general de los grupos y no nos importa excesivamente clasificar erroneamente algunos individuos es mejor optar por aplicar dbscan sobre la selección de  variables. Si por el contrario prefiriésemos clasificar de forma correcta a la mayoría de los individuos de Sharp-Shinned y Red-tailed sería mejor optar por aplicar el método xi sobre la seleccion de variables correspondientes a atributos físicos. 
+
+
+# 3  Comparativa de los métodos k-means y DBSCAN
+
+## Conclusiones de K-means
+
+Para comparar ambos métodos podemos crear una tabla similar a las que hemos creado en el apartado de DBSCAN para K-means.  Los datos y clasificacion que utilizaremos para crear esta tabla son los obtenidos al hacer k-means con 3 centers sobre la selección de datos pertenecientes a atributos físicos. 
+
+
+```{r}
+resultados_cluster_kmeans <- data.frame(
+  Species = analysis_data$Species,  
+  Cluster = k3f$cluster
+)
+contadores <- table(resultados_cluster_kmeans$Species, resultados_cluster_kmeans$Cluster)
+rownames(contadores) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+
+print(contadores)
+```
+
+Como podemos observar:
+
+- Cooper’s se han clasificado 32 individuos en el cluster 2 y 36 en el cluster 3.  
+- Red-tailed se han clasificado 226 en el cluster 1 y 227 en el cluster 2.   
+- Sharp-Shinned se han clasificado 191 individuos en el cluster 3 y 1 en el cluster 2.   
+
+
+Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y el cluster 3 corresponde a  Sharp-Shinned. Sin embargo para Cooper’s y Red-tailed las observaciones se distribuyen prácticamente a la mitad entre dos clusters. 
+
+Así: 
+
+- Cooper’s tiene un 46.26% de sus observaciones en el cluster 2 y un 53.73% de sus observaciones en el cluster 3.    
+- Red-tailed tiene un 48.98% de sus observaciones en el cluster 1 y un 51.01% de sus observaciones en el cluster 2.      
+- Sharp-Shinned tiene un 0.52% de sus observaciones en el cluster 2 y un 99.47% de sus observaciones en el cluster 3.  
+
+Prácticamente todos los individuos de Sharp-Shinned se encuentran clasificados en el cluster 3 aunque en este también se encuentran individuos pertenecientes a Cooper’s. Esto nos indica que los individuos mas pequeños de Cooper’s se confunden con la especie de Sharp-Shinned. 
+
+Por su parte, los individuos de Cooper’s que no se mezclan con los de Sharp-Shinned se mezclan con los individuos mas pequeños de Red-tailed. 
+
+
+## Conclusiones de DBSCAN
+
+Podemos retomar las conclusiones que obtivimos de aplicar dbscan sobre los datos pertenecientes a los atributos físicos sin utilizar el método xi. Utilizaremos estos resultados para analizar el rendimiento del método. 
+
+```{r}
+resultados_cluster_selección <- data.frame(
+  Species = analysis_data$Species,  
+  Cluster = div_physical_3$cluster
+)
+contadores <- table(resultados_cluster_selección$Species, resultados_cluster_selección$Cluster)
+rownames(contadores) <- c("Cooper’s", "Red-tailed", "Sharp-Shinned")
+
+print(contadores)
+```
+
+Como podemos observar: 
+
+- Cooper’s se ha clasificado 1 individuo en el cluster 1, 59 en el cluster 2 y 2 en el cluster 3. Se han excluido 5 individuos.  
+- Red-tailed se han clasificado 525 en el cluster 1. Se han excluido 18 individuos.   
+- Sharp-Shinned se han clasificado 190 individuos en el cluster 3 y 1 en el cluster 2. Se ha excluido 1 individuo.   
+
+
+Podríamos decir que el cluster 1 corresponde a Red-tailed, el cluster 2 corresponde a Cooper’s y el cluster 3 corresponde a  Sharp-Shinned
+
+El grupo peor clasificado ha sido **Cooper’s** donde un 88.05% de los datos se han clasificado correctamente, un 7.46% no han sido clasificados en nungún grupo, y un 4.47% de los datos ha sido clasificado en un grupo erróneo. 
+
+El mejor grupo clasificado ha sido **Sharp-Shinned** con un 98.95% de las observaciones clasificadas correctamente, un 0.52% de las observaciones clasificados en un grupo erróneo y un 0.52% de los datos sin clasificar. 
+
+**Red-tailed** tambien ha clasificado correctamente la mayoría de sus observaciones (un 96.68%) y ha dejado un 3.31% de los datos sin clasificar. 
+
+Esta información se resume en la siguiente tabla: 
+
+```{r}
+results_selected_var <- matrix(c(88.05, 4.47, 7.46,
+                                   98.95, 0.52, 0.52,
+                                   96.68, 3.31, 0),
+                                 nrow = 3, byrow = TRUE,
+                                 dimnames = list(c("Cooper’s", "Sharp-Shinned", "Red-tailed"),
+                                                 c("Clasificado Correctamente", "Clasificado Erróneamente", "Sin Clasificar")))
+print(results_selected_var)
+```
+
+
+
+## Comparativa de ambos métodos
+
+
+Para nuestro caso de estudio, la aplicación de k-means y DBSCAN para el clustering de tres especies de halcones basado en sus atributos físicos ha arrojado resultados distintos y revelado características específicas de cada algoritmo.
+
+**K-means:**
+
+- K-means parece haber tenido dificultades para manejar la variabilidad y solapamiento entre las especies, especialmente evidente en la distribución casi equitativa de individuos de Cooper’s y Red-tailed entre dos clusters.
+
+- La interpretación de los resultados de k-means sugiere una confusión significativa entre individuos más pequeños de Cooper’s y Sharp-Shinned, así como entre individuos más grandes de Cooper’s y Red-tailed.
+
+- La sensibilidad a la forma esférica de los clusters y la dependencia de los valores iniciales de los centroides han contribuido a esta confusión.
+
+**DBSCAN:**
+
+- DBSCAN, por otro lado, ha demostrado ser más robusto en la identificación de clusters de forma variable y ha asignado correctamente un alto porcentaje de individuos a sus respectivos grupos.
+
+- Sin embargo, DBSCAN también presenta algunas limitaciones, como la exclusión de un pequeño porcentaje de individuos que no pertenecen a ningún cluster.
+
+**Comparación:**
+
+Ambos algoritmos han mostrado una buena capacidad para identificar individuos de la especie Sharp-Shinned, pero k-means ha presentado dificultades con las especies Cooper’s y Red-tailed.
+
+En el contexto específico de nuestro conjunto de datos, mi opinión es que DBSCAN es más efectivo al identificar clusters mas afines a la distribución de nuestros datos. Aunque k-means proporciona una clasificación visual más clara, no es de utilidad a la hora de diferenciar individuos de las especies de halcon en base a sus atributos físicos. Por otro lado, DBSCAN encuentra patrones más detallados y hace una mejor identificación de individuos de las especies de halcones analizadas.
