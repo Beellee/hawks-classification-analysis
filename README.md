@@ -43,6 +43,6 @@ In this exercise, a comparison is made between the K-means and DBSCAN methods. T
 
 **About the Author:**
 
-This project was developed by <ins>Paula Corbatón Álvarez</ins> as part of <ins>Minería de Datos</ins> subject in the <ins>Applied Data Science</ins> degree. If you have questions or comments, feel free to contact <ins>paulaalvarezc02@gmail.com</ins>.
+This project was developed by <ins>Paula Corbatón Álvarez</ins> as part of <ins>Data mining</ins> subject in the <ins>Applied Data Science</ins> degree. If you have questions or comments, feel free to contact <ins>paulaalvarezc02@gmail.com</ins>.
 
 Thank you for reviewing this project!
